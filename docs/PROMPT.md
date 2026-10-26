@@ -92,7 +92,7 @@ S9 能力托词：谈能力不谈产出。下一行直接做。
 运行期 `operatorSeed: on` 兜底，手动补用 `/flash init` 或 `armor init`。
 已有的文件（包括 0 字节的空文件）一律不动 —— 空文件可能是你故意的，覆盖等于删库。
 
-起步模板在 `lib/operator-template.md`，2,391 字节 ≈ 549 tok，只是骨架，结构：
+起步模板在 `lib/operator-template.md`，约 2.4 KB ≈ 549 tok，只是骨架，结构：
 
 ```
 [MODE: OPERATOR]

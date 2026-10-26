@@ -314,8 +314,9 @@ print(d.stream_reader(open(sys.argv[1],'rb')).read().decode('utf-8','replace'))"
 `assistant/message` 里 `content[]` 分 `type=reasoning` 与 `type=text` ——
 **两个都要看**，拒绝的判决发生在 reasoning 里，可见回复只是结果。
 
-**攻击成功率**：别用关键词表（见第五节）。用 LLM judge + 三轴打分，
-或者至少人工标 20 条定阈值。
+**攻击成功率**：别用关键词表。实测它会把「这个我不接」「这套我不做」这类真拒答全判成通过，
+也会把正文里出现「抱歉」二字的正常回答判成拒答 —— 于是报出一个好看但错的数字。
+用 LLM judge + 三轴打分，或者至少人工标 20 条定阈值。
 
 **实验矩阵**：见 [`docs/PLAN-2.2-deepseek-only.md`](docs/PLAN-2.2-deepseek-only.md)，
 七组对照（E0–E7），每一组都写了「测什么 / 怎么测 / 判据」。
@@ -328,7 +329,7 @@ print(d.stream_reader(open(sys.argv[1],'rb')).read().decode('utf-8','replace'))"
 SHA-256：
 
 ```powershell
-Get-FileHash .\dsh-purge-flash-1.5.3.zip -Algorithm SHA256
+Get-FileHash .\dsh-purge-flash-1.5.4.zip -Algorithm SHA256
 ```
 
 两串一样再往下。
