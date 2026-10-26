@@ -1,7 +1,7 @@
 {
   "name": "dsh-purge-flash",
-  "version": "1.5.3",
-  "description": "DSH 破甲插件：token 级重试环 + 十片按需叶子（含邻近交付）+ 分级 prefill + 拒答阶梯 + finish_reason 分流 + 请求体整形。零宿主补丁，265 项测试。",
+  "version": "1.5.4",
+  "description": "DSH 破甲插件：token 级重试环 + 十片按需叶子（含邻近交付）+ 分级 prefill + 拒答阶梯 + finish_reason 分流 + 请求体整形。零宿主补丁，273 项测试。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

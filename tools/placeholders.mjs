@@ -53,6 +53,9 @@ function targets() {
   const list = [
     { label: "内核 lib/kernel.js", file: path.join(ROOT, "lib", "kernel.js") },
     { label: "技能册 skill/armor-playbook.md", file: path.join(ROOT, "skill", "armor-playbook.md") },
+    // 起步模板随包发、会被 /flash init 落到用户家里，所以它同样受契约约束：
+    // 里面出现一个规范表没有的槽，用户抄走的操作稿就会教模型填一个不存在的名字。
+    { label: "操作稿模板 lib/operator-template.md", file: path.join(ROOT, "lib", "operator-template.md") },
   ];
   const home = (process.env.DSH_HOME || "").trim() || path.join(os.homedir(), ".dsh");
   const op = path.join(home, "prompt-inject.md");

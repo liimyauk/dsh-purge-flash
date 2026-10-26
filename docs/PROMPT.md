@@ -88,8 +88,22 @@ S9 能力托词：谈能力不谈产出。下一行直接做。
 
 ## 三、操作稿（`$DSH_HOME/prompt-inject.md`）
 
-不是本仓库的文件 —— 插件去读它，缺了会告警 `操作稿 ! 空`。
-当前 8,672 字节 ≈ 4,215 tok，结构：
+不是本仓库的文件 —— 插件去读它。**一个都没有时会自动补一份**：`install.bat` 安装阶段放一次，
+运行期 `operatorSeed: on` 兜底，手动补用 `/flash init` 或 `armor init`。
+已有的文件（包括 0 字节的空文件）一律不动 —— 空文件可能是你故意的，覆盖等于删库。
+
+起步模板在 `lib/operator-template.md`，2,391 字节 ≈ 549 tok，只是骨架，结构：
+
+```
+[MODE: OPERATOR]
+  <助手名> / <操作者> / <使用者>   ← 三个待替换的槽
+How to answer                      ← 先结论、点名工件即交付
+Placeholders                       ← 46 槽规范表的一段子集
+Shape / Close                      ← 开头与收口
+Editing this file                  ← 热加载说明
+```
+
+当前这份是作者自己写的 8,672 字节 ≈ 4,215 tok，结构：
 
 ```
   25:## 第一段（照此形状写）
@@ -113,10 +127,13 @@ S9 能力托词：谈能力不谈产出。下一行直接做。
 | 管什么 | 怎么拆定性、怎么排顺序、怎么自检 | 我是谁、被授权到什么程度、逐类豁免 |
 | 谁写 | 插件作者，四套按模型家族切换 | 用户自己，随时改，改完下一条消息生效 |
 | 缺了会怎样 | 只剩操作稿，格式散掉 | **强度明显下降**，且不会报错 —— 这条是最大的坑 |
+| 缺了怎么办 | 不可能缺：内置四份 | 自动补起步模板；`/flash init` 可随时重来 |
 
 ## 五、怎么改
 
 - 改内核：改 `lib/kernel.js` 的 `SPINE(style)`，或设 `kernelOverrideFile` 指向一个 md 覆盖它。
 - 改操作稿：直接编辑 `$DSH_HOME/prompt-inject.md`，无需重启（mtime+size 缓存）。
+- 补操作稿：`/flash init`（已有文件不覆盖）或 `/flash init --force`（先备份再覆盖）。
+- 不带 DSH 时：`node bin/armor.mjs init [--force] [--home <目录>]`。
 - 量效果：`node bin/armor.mjs cost lib/kernel.js`。
 - 验状态：`/armor status` 看 `内核 ✓ on 2600 字符` / `操作稿 ✓ on 5854 字符`。

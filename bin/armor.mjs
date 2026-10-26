@@ -6,9 +6,12 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { pathToFileURL } from "node:url";
 
+import { operatorPath, seedOperatorFile } from "../lib/operator.js";
+
 const MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd]);
 
 const USAGE = `用法：
+  armor init [--force] [--home <目录>]   把起步操作稿模板写到 <DSH_HOME>/prompt-inject.md
   armor list [--dir <镜像根>]
   armor recover <sid> [--dir <镜像根>] [--out <文件>]
   armor verify <sid> [--dir <镜像根>]
@@ -20,6 +23,46 @@ const USAGE = `用法：
   DSH_HOME   默认 ~/.dsh
   PURGE_DIR  dsh-purge 安装目录
 `;
+
+/**
+ * 起步模板命令。
+ *
+ * 为什么要有（issue #4）
+ * ---------------------
+ * 插件装完，用户第一条看到的是 `/flash light` 里那行 `操作稿 ! 空`。那个文件
+ * 是强度的主要来源，但不由本包提供 —— 新装用户手上既没有格式，也不知道该写
+ * 多长。补一条不需要 DSH 在跑的命令，比在文档里写十行「请自己新建」有用。
+ */
+function cmdInit(opts) {
+  const home = String(opts.home || "").trim() || dshHome();
+  const res = seedOperatorFile(home, { force: opts.force === true });
+
+  if (!res.written) {
+    if (res.reason === "exists") {
+      process.stdout.write(
+        `已经有操作稿，没有动它：${res.path}\n` +
+          `想改用起步模板重写：armor init --force（会先备份成 .bak-<时间戳>）\n`,
+      );
+      return 0;
+    }
+    process.stderr.write(`没写成：${res.reason}（路径 ${res.path || operatorPath(home)}）\n`);
+    return 1;
+  }
+
+  const tok = estimateTokens(fs.readFileSync(res.path, "utf8"));
+  const out = [
+    `已写入 ${res.path}`,
+    res.backup ? `旧文件备份：${res.backup}` : "",
+    `${res.bytes} 字节 ≈ ${tok} tok。不用重启 DSH，下一条消息就带上。`,
+    "",
+    "接下来：",
+    "  1. 把文件里的 <操作者> / <使用者> / <助手名> 换成你自己的",
+    "  2. 发一条消息（首次装载完成后才生效）",
+    "  3. /flash light —— 「操作稿」那行应该变成 ✓ on",
+  ].filter((line) => line !== "");
+  process.stdout.write(`${out.join("\n")}\n`);
+  return 0;
+}
 
 export function countFrames(buf) {
   if (!buf || buf.length === 0) return 0;
@@ -65,7 +108,11 @@ function parseArgs(args) {
   const opts = { _: [] };
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
-    if (arg === "--dir" || arg === "--out" || arg === "--from") {
+    if (arg === "--force" || arg === "-f") {
+      opts.force = true;
+      continue;
+    }
+    if (arg === "--dir" || arg === "--out" || arg === "--from" || arg === "--home") {
       const value = args[i + 1];
       if (value !== undefined && !value.startsWith("--")) {
         opts[arg.slice(2)] = value;
@@ -532,6 +579,8 @@ function main(argv) {
   }
   const opts = parseArgs(argv.slice(1));
   switch (cmd) {
+    case "init":
+      return cmdInit(opts);
     case "list":
       return cmdList(opts);
     case "recover":

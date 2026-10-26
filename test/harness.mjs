@@ -16,6 +16,7 @@ import path from "node:path";
 
 import { apply } from "../lib/index.js";
 import { renderKernel } from "../lib/kernel.js";
+import { renderStatus } from "../lib/commands.js";
 
 let pass = 0;
 let fail = 0;
@@ -140,7 +141,10 @@ process.env.DSH_HOME = tmpHome;
 
 console.log("1. 装配");
 const h = makeCtx();
-const state = apply(h.ctx, { verbose: false, mirrorDir: "purge-flash-raw" });
+// operatorSeed: off —— 这一组测的是「内核段本身」。临时 home 里没有操作稿，
+// 补种会把模板拼进来，让「家族切换后文本 == renderKernel(claude)」那类断言失真。
+// 补种单独在 1b 测，用自己的一份临时 home。
+const state = apply(h.ctx, { verbose: false, mirrorDir: "purge-flash-raw", operatorSeed: "off" });
 
 check("内核段注册在最前", () => {
   assert.ok(h.sections.has("purge-flash:kernel"), [...h.sections.keys()].join(","));
@@ -176,6 +180,53 @@ check("/flash 注册进 commands，/armor 留作别名", () => {
   assert.ok(names.includes("flash"), "主名应是 flash");
   assert.ok(names.includes("armor"), "旧名 armor 要保留");
   assert.equal(h.commands.length, 2);
+});
+
+console.log("\n1b. 操作稿补种（issue #4）");
+await checkAsync("空 home + operatorSeed on → 自动落一份模板，层变 on", async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "pf-seed-"));
+  const prev = process.env.DSH_HOME;
+  process.env.DSH_HOME = home;
+  try {
+    const hb = makeCtx();
+    const sb = apply(hb.ctx, { mirror: false, playbook: false, operatorSeed: "on" });
+    assert.equal(sb.layers.operator, "on", "补种后操作稿层应为 on");
+    assert.equal(sb.operatorSeeded, true, "应记下这一次补种");
+    const file = path.join(home, "prompt-inject.md");
+    assert.ok(fs.existsSync(file), "应写出 prompt-inject.md");
+    const text = hb.sections.get("purge-flash:kernel").text();
+    assert.ok(text.includes("[MODE: OPERATOR]"), "模板内容应进入 system prompt");
+    assert.ok(text.includes("TARGET"), "占位表应随模板一起进");
+    fs.writeFileSync(file, "手写的操作稿", "utf8");
+    const hc = makeCtx();
+    const sc = apply(hc.ctx, { mirror: false, playbook: false, operatorSeed: "on" });
+    assert.equal(fs.readFileSync(file, "utf8"), "手写的操作稿", "已有文件不能被覆盖");
+    assert.equal(sc.operatorSeeded, false, "不该记补种");
+  } finally {
+    process.env.DSH_HOME = prev;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+await checkAsync("operatorSeed off → 不写文件，层报 empty", async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "pf-noseed-"));
+  const prev = process.env.DSH_HOME;
+  process.env.DSH_HOME = home;
+  try {
+    const hd = makeCtx();
+    const sd = apply(hd.ctx, { mirror: false, playbook: false, operatorSeed: "off" });
+    assert.equal(sd.layers.operator, "empty");
+    assert.equal(sd.operatorSeeded, false);
+    assert.equal(fs.existsSync(path.join(home, "prompt-inject.md")), false, "不该写文件");
+    assert.ok(sd.operatorExpected.endsWith("prompt-inject.md"), "状态里要能报出期望路径");
+    // issue #4 的核心：那行不能只说「空」，要给出路径和下一步。
+    const panel = renderStatus(sd);
+    assert.ok(panel.includes("/flash init"), "状态行要写出修法：\n" + panel);
+    assert.ok(panel.includes("prompt-inject.md"), "状态行要写出路径：\n" + panel);
+    assert.ok(!panel.includes("! 没找到 prompt-inject.md"), "旧文案（不带路径）不该再出现");
+  } finally {
+    process.env.DSH_HOME = prev;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
 
 console.log("\n2. 组装改写真的生效");
@@ -418,6 +469,34 @@ await checkAsync("/armor recover 无镜像时明确报错", async () => {
   const cmd = h.commands.find((c) => c.name === "armor");
   const res = await cmd.handler({ rawInput: "recover 不存在的会话" });
   assert.equal(res.kind, "error");
+});
+
+await checkAsync("/flash init 命令：写出模板并回绝对路径", async () => {
+  const cmd = h.commands.find((c) => c.name === "flash");
+  // 这一条会真写文件，用自己的一份临时 home，别污染前面的 tmpHome。
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "pf-cmdinit-"));
+  const prev = process.env.DSH_HOME;
+  process.env.DSH_HOME = home;
+  try {
+    const res = await cmd.handler({ rawInput: "init" });
+    assert.equal(res.kind, "success", res.text);
+    const file = path.join(home, "prompt-inject.md");
+    assert.ok(fs.existsSync(file), "应写出 prompt-inject.md");
+    assert.ok(res.text.includes(file), "回复里要带绝对路径，别让人自己拼");
+    // 第二次：已有文件 → error，且不覆盖
+    const before = fs.readFileSync(file, "utf8");
+    const again = await cmd.handler({ rawInput: "init" });
+    assert.equal(again.kind, "error");
+    assert.ok(again.text.includes("--force"), "要告诉用户怎么强制重来");
+    assert.equal(fs.readFileSync(file, "utf8"), before, "不许覆盖");
+    // --force：备份 + 覆盖
+    const forced = await cmd.handler({ rawInput: "init --force" });
+    assert.equal(forced.kind, "success", forced.text);
+    assert.ok(forced.text.includes("备份"), "要报出备份路径");
+  } finally {
+    process.env.DSH_HOME = prev;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
 
 console.log("\n7. 内核家族切换");

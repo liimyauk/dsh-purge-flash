@@ -1,4 +1,4 @@
-﻿<#
+<#
   一键安装 dsh-purge-flash
   ------------------------------------------------------------------
   只做三件事，不碰 DSH 安装目录里的任何文件：
@@ -193,7 +193,25 @@ if ($doCopy) {
   Ok "已复制到 node_modules\$Pkg"
 }
 
-# ---------- 5. 完 ----------
+# ---------- 5. 操作稿：没有就补一份起步模板 ----------
+# issue #4：装完 `/flash light` 只报「操作稿 ! 空」，用户手上没有任何可抄的结构。
+# 这里在安装阶段就把模板落下去，让第一次 /flash light 直接是 ✓ on。
+$opFile = Join-Path $DshHome "prompt-inject.md"
+$opSeeded = $false
+if (Test-Path $opFile) {
+  Ok "操作稿已存在，没动它：$opFile"
+} else {
+  try {
+    New-Item -ItemType Directory -Path $DshHome -Force | Out-Null
+    Copy-Item (Join-Path $Repo "lib\operator-template.md") -Destination $opFile -Force
+    $opSeeded = $true
+    Ok "已生成起步操作稿：$opFile"
+  } catch {
+    Warn "操作稿模板没写成（$($_.Exception.Message)）。之后可以跑 /flash init 或 node bin/armor.mjs init"
+  }
+}
+
+# ---------- 6. 完 ----------
 Say ""
 Say "  装好了。还差一步："
 Say ""
@@ -202,5 +220,10 @@ Say "    2. 重新打开，发一条消息"
 Say "    3. 输入 /flash light，看到「内核 ✓ on」就成了"
 Say ""
 Say "  如果 status 全是一行行 —：确认重启了、profile 名对不对。"
-Say "  如果「操作稿」那行是「! 空」：$DshHome\prompt-inject.md 还没写，强度会明显偏低。"
+if ($opSeeded) {
+  Say "  操作稿是刚生成的模板：把里面的 <操作者> / <使用者> / <助手名> 换成你自己的。"
+  Say "  它是强度的主要来源，模板只是骨架 —— 换成自己的话才有用。"
+} else {
+  Say "  如果「操作稿」那行是「! 空」：$opFile 是空文件，用 /flash init --force 重写一份。"
+}
 Say ""

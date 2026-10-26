@@ -19,7 +19,14 @@ import path from "node:path";
 import zlib from "node:zlib";
 
 import { FAMILIES, renderKernel, pickFamily } from "../lib/kernel.js";
-import { composeKernel, createOperatorReader, findOperatorFile } from "../lib/operator.js";
+import {
+  composeKernel,
+  createOperatorReader,
+  findOperatorFile,
+  operatorCandidates,
+  operatorPath,
+  seedOperatorFile,
+} from "../lib/operator.js";
 import {
   classifyReply,
   isHardRefusal,
@@ -477,6 +484,64 @@ check("composeKernel：内核在前、操作稿在后", () => {
   assert.equal(composeKernel("", "KERNEL"), "KERNEL");
   assert.equal(composeKernel("OPERATOR", ""), "OPERATOR");
   assert.equal(composeKernel("", ""), "");
+});
+
+/* ------------------------------------- 6b. 操作稿补种（issue #4 回归） */
+console.log("\n6b. 操作稿补种");
+check("operatorCandidates：三条候选 + 首选就是 prompt-inject.md", () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "pf-cand-"));
+  const all = operatorCandidates(home);
+  assert.equal(all.length, 3);
+  assert.ok(all[0].endsWith("prompt-inject.md"));
+  assert.equal(operatorPath(home), all[0]);
+  // 不传 home 时退回 DSH_HOME。两条路径必须指向同一处 —— status 报的路径
+  // 和读取器真正打开的文件要是同一个，否则用户照着报错去建文件还是会 `! 空`。
+  const fallback = operatorCandidates("")[0];
+  assert.ok(fallback.endsWith("prompt-inject.md"));
+  assert.equal(path.dirname(fallback), path.dirname(operatorPath("")), "回退路径不稳定");
+  fs.rmSync(home, { recursive: true, force: true });
+});
+check("没有文件 → 写出模板，字节数与文件一致", () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "pf-seed1-"));
+  const res = seedOperatorFile(home);
+  assert.equal(res.written, true);
+  assert.equal(res.reason, "ok");
+  const text = fs.readFileSync(res.path, "utf8");
+  assert.ok(text.includes("[MODE: OPERATOR]"), "模板应带操作稿标记");
+  assert.ok(text.includes("TARGET"), "模板应带占位表");
+  assert.equal(res.bytes, Buffer.byteLength(text, "utf8"));
+  fs.rmSync(home, { recursive: true, force: true });
+});
+check("已有文件 → 不动它", () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "pf-seed2-"));
+  const fp = path.join(home, "prompt-inject.md");
+  fs.writeFileSync(fp, "我自己的操作稿", "utf8");
+  const res = seedOperatorFile(home);
+  assert.equal(res.written, false);
+  assert.equal(res.reason, "exists");
+  assert.equal(fs.readFileSync(fp, "utf8"), "我自己的操作稿");
+  fs.rmSync(home, { recursive: true, force: true });
+});
+check("force → 覆盖前先备份", () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "pf-seed3-"));
+  const fp = path.join(home, "prompt-inject.md");
+  fs.writeFileSync(fp, "旧稿", "utf8");
+  const res = seedOperatorFile(home, { force: true });
+  assert.equal(res.written, true);
+  assert.ok(res.backup && fs.existsSync(res.backup), "必须留下备份");
+  assert.equal(fs.readFileSync(res.backup, "utf8"), "旧稿", "备份内容应是旧稿");
+  assert.ok(fs.readFileSync(fp, "utf8").includes("[MODE: OPERATOR]"));
+  fs.rmSync(home, { recursive: true, force: true });
+});
+check("空文件也算已有 → 不补种（尊重用户留空）", () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "pf-seed4-"));
+  const fp = path.join(home, "prompt-inject.md");
+  fs.writeFileSync(fp, "", "utf8");
+  const res = seedOperatorFile(home);
+  assert.equal(res.written, false);
+  assert.equal(res.reason, "exists");
+  assert.equal(fs.readFileSync(fp, "utf8"), "");
+  fs.rmSync(home, { recursive: true, force: true });
 });
 
 /* --------------------------------------------------------------- 收尾 */

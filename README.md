@@ -57,7 +57,7 @@ flowchart LR
 | **1,597 tok** | 每轮常驻（内核 1,448 + 尾部回声 149）。命中类目时请求体再加 **67–91 tok**（many-shot 3 对）与 **10 tok**（语义续写），128k 窗口合计不到 1.3% |
 | **0 个宿主文件** | 全部走 DSH 公开事件面。升级 DSH 不用重打补丁 |
 | **6 父 + 10 片** | 拒答命中后按三层路由装载：叶强命中给该类的具体工具链（约 350 tok），弱命中给父技能（≤134 tok），零命中兜底 |
-| **265 项测试** | 不需要 DSH、不需要第三方依赖，`npm test` 直接跑 |
+| **273 项测试** | 不需要 DSH、不需要第三方依赖，`npm test` 直接跑 |
 | **479 KB** | 整个仓库，66 个文件，纯 JS 无依赖 —— 全部可读，没有二进制 |
 
 这 1,597 token 买的是「开口方向」：它在你打字之前就占好位置，让你说的每句话后面都跟着一个已经开始的回答。
@@ -122,11 +122,13 @@ ln -s /你的路径/dsh-purge-flash ~/.dsh/profiles/desktop/node_modules/dsh-pur
 
 ```bash
 node bin/armor.mjs cost lib/kernel.js   # 1. 内核算得出来吗（不需要 DSH）
-# 2. 发一条消息，然后 /flash light —— 每行是不是 ✓
-# 3. status 里「操作稿」那行是不是「! 空」
+node bin/armor.mjs init                 # 2. 没有操作稿就落一份起步模板（已存在则不覆盖）
+# 3. 发一条消息，然后 /flash light —— 每行是不是 ✓
 ```
 
-第 3 项是强度主来源：`$DSH_HOME/prompt-inject.md`。没这个文件插件照样跑，但强度会明显低于预期。
+第 3 项是强度主来源：`$DSH_HOME/prompt-inject.md`。`install.bat` 会在缺文件时自动放一份
+`lib/operator-template.md` 过去；漏了就 `node bin/armor.mjs init` 或 `/flash init`。
+模板只是骨架 —— 把 `<操作者>` / `<使用者>` / `<助手名>` 换成你自己的话，它才有用。
 
 </details>
 
@@ -198,7 +200,7 @@ node bin/armor.mjs cost lib/kernel.js   # 1. 内核算得出来吗（不需要 D
 | **零宿主补丁** | 一行宿主文件都不碰 | 补丁买的是可达性，不是强度；代价是升级即失稳、失配静默失效 |
 | **词表契约** | `tools/lexicon-audit.mjs` 把判定表 / 软拒表 / 洗口表拉平对撞 | 冷咖啡的两张表 51/80 行零交集、两条腿互绊。这个工具防我们重犯，进 CI |
 | **占位符契约** | `tools/placeholders.mjs` 扫内核 / 技能册 / 操作稿，报未登记占位符 | 操作稿被改坏时不会静默降级 |
-| **265 项测试** | 十一套用例 + 两个契约工具，全部不需要 DSH、不需要第三方依赖 | 覆盖到「两个层同时动手会不会互相毁掉」，以及「同一批事件被补录两遍会不会写两次」 |
+| **273 项测试** | 十一套用例 + 两个契约工具，全部不需要 DSH、不需要第三方依赖 | 覆盖到「两个层同时动手会不会互相毁掉」，以及「同一批事件被补录两遍会不会写两次」 |
 | **CLI 可离线** | `bin/armor.mjs` 不需要 DSH 就能跑 recover / verify / cost / migrate | 出问题时能在宿主外自证 |
 
 
@@ -614,7 +616,9 @@ flowchart TD
 | 有操作稿 | 24,171 字符 | 2 次（11,708 字符） | 通过，给了具体名字 |
 | 无操作稿 | 11,119 字符 | 0 次 | 拒绝，列了三条法律风险 |
 
-所以操作稿缺失时插件会明确告警 —— `/flash light` 里那一行会显示 `! 空`。别忽略它。只有内核在跑的时候，强度会明显低于你的预期。
+所以操作稿缺失时插件会明确告警 —— `/flash light` 里那一行会显示 `! 没有操作稿` 并带上期望路径。
+1.5.4 起不会只停在这句：`install.bat` 装的时候就补一份起步模板，运行期还有 `/flash init`。
+只有内核在跑的时候，强度会明显低于你的预期。
 
 ### 为什么内核能省 85%
 
@@ -675,9 +679,10 @@ DSH 的会话日志是事件溯源、只追加的。撤回、压缩、修剪都�
 
 ```
 /flash light           每层是否真挂上 + 内核 token + 镜像统计
+/flash init [--force]  把起步操作稿模板写到 $DSH_HOME/prompt-inject.md
 /flash on | off        开 / 关内核（其余层照跑）
 /flash cost            内核字符数与估 token，附 purge / 冷咖啡对照
-/flash recover <sid>   导出镜像转录（撤回 / 遮蔽段落打 ⚠️）
+/flash recover <sid>   导出镜像转录（撤回/遮蔽段落打 ⚠️）
 /flash verify <sid>    比对原日志与镜像，查截断
 /flash list            列出已镜像的会话
 /flash rewind [once|round]  撤回上一步 / 上一整轮
@@ -744,6 +749,7 @@ kernelTail: on              # 尾部回声
 kernelTailOrder: 10200
 operatorPrompt: on          # 读 prompt-inject.md 注入（强度主来源）
 operatorHome: ""            # 空 = $DSH_HOME
+operatorSeed: on            # 一个操作稿都没有时，自动落一份起步模板（已有文件不动）
 stripOfficial: true         # 剥官方身份句 + 硬拦截句
 dedupeOperator: foreign     # foreign | all | off
 msgStrip: true              # 消息级免责句剥离
@@ -842,7 +848,9 @@ node bin/armor.mjs cost lib/kernel.js   # 1. 内核能算出来吗（不依赖 D
 | `/flash light` 每行都是 `—`，或命令不存在 | 插件没挂上 | `bundles` 里没加 `dsh-purge-flash`，或没重启。改 `~/.dsh/profiles/desktop/package.json` 的 `dsh.profile.bundles`，然后**退进程重开** |
 | 命令层那一行是 `… 等服务上线` | 宿主的 `commands` 服务还没起来 | 1.5.3 起会自己等，等到就注册。一直停在这行 = 这个 profile 没挂 commands 插件，那本来就没有斜杠命令可用，其余层照跑 |
 | 镜像目录一直在长，磁盘吃满 | 1.5.2 及更早的补录 bug | 升到 1.5.3。旧镜像不用删，`recover` / `armor list` 会自动摊平旧帧 |
-| 挂上了，但明显不够强 | 操作稿是空的 | `$DSH_HOME/prompt-inject.md` 不存在或为空。`/flash light` 那一行会显示 `! 空`。强度主要来自这个文件，不是插件 |
+| 挂上了，但明显不够强 | 操作稿是空的 | `$DSH_HOME/prompt-inject.md` 不存在或为空。一行 `/flash init` 落一份起步模板，改完不用重启。强度主要来自这个文件，不是插件 |
+| 状态里 `操作稿 ! 没有操作稿`，但我明明写了 | 路径不是它读的那条 | 状态行现在会把期望路径整个打出来。插件只认 `$DSH_HOME/prompt-inject.md`（以及 `.zh.md` / `.en.md`），不认别的目录；`operatorHome` 可以指到别处 |
+| 状态里 `操作稿 ! 文件是空的` | 文件存在但 0 字节 | 和「不存在」是两回事，插件不会替你覆盖（空文件可能是你故意的）。要模板就 `/flash init --force`，会先备份 |
 | 侧栏一批旧会话不见了 | purge 留下的归档集合 | 跑 `node bin/fix-hidden.mjs --verify` 看数，退 DSH 后 `--apply`。见[下一节](#从-dsh-purge-迁过来) |
 | 状态里 `请求体整形 failed:DUPLICATE_ADAPTER` | `adapterAlias` 被别的插件占了 | 换一个别名：`adapterAlias: deepseek-armor-2` |
 | 状态里 `适配 ... no-service` | 拿不到 `llm` 服务 | DSH 版本不对（需要 ≥ 0.2.1-rc.2）。其余层照跑，只是没有请求体整形 |

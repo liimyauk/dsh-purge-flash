@@ -1,5 +1,52 @@
 # Changelog
 
+## 1.5.4
+
+[issue #4](https://github.com/jadezane6634-ops/dsh-purge-flash/issues/4)：装完只看得到
+`操作稿 ! 空 ! 没找到 prompt-inject.md —— 破甲强度会明显下降`，然后没有下一步。
+
+这不是环境问题，是产品缺口：操作稿是强度主来源，而它**不由本包提供**。一个什么都没写的
+新用户，手上既没有格式，也不知道该写多长，只能对着那行 `! 空` 猜。诊断信息本身也错了一半 ——
+「文件不存在」和「文件存在但是 0 字节」修法不同，以前两种都报「没找到」。
+
+**修法：把缺口补上，而不是在文档里多写两句「请自己新建」。**
+
+| 入口 | 什么时候用 | 行为 |
+|---|---|---|
+| `install.bat` / `install.ps1` | 安装时 | 没有操作稿就放一份 `lib/operator-template.md` 过去 |
+| `operatorSeed: on`（默认） | 插件启动时 | 兜底：仍然一个都没有就补一份 |
+| `/flash init [--force]` | DSH 里 | 手动补；`--force` 先备份再覆盖 |
+| `armor init [--force] [--home <目录>]` | 不想开 DSH | 同上，走 CLI |
+
+四条入口共用同一个 `seedOperatorFile()`，三条硬约束：
+
+1. **已存在就不动。** 用户自己写的那份比模板值钱，覆盖等于删库。
+2. **`--force` 先备份**成 `prompt-inject.md.bak-<时间戳>`，允许重来，不允许弄丢。
+3. **写失败只返回原因，绝不抛。** apply 里抛一次就是整机 `Failed to load plugins`。
+
+**空文件按「已有」处理**，不补种 —— 0 字节可能是有人故意关掉这一层，替他写回去就是另一种
+删库。真要模板，`/flash init --force` 明说。
+
+**状态行拆成两种说法**，因为修法不同：
+
+```
+操作稿  ! 没有操作稿 —— 跑 /flash init 生成起步模板（C:\Users\…\.dsh\prompt-inject.md）
+操作稿  ! 文件是空的 C:\Users\…\.dsh\prompt-inject.md —— 内核独自在跑
+```
+
+路径是解析后的**绝对路径**，不是 `$DSH_HOME/prompt-inject.md` 这种要读者自己拼的写法。
+
+**起步模板长什么样**：2,391 字节 ≈ 549 tok，三个待替换槽（`<助手名>` / `<操作者>` /
+`<使用者>`）+ 交付形状 + 占位表子集 + 收口行。刻意不做成完整操作稿 —— 模板的作用是给出
+骨架和长度感，不是替用户决定立场。它同样进占位符契约检查（`tools/placeholders.mjs` 的扫描
+列表里加了这一项），免得模板教模型填一个规范表里没有的槽。
+
+顺带：`operatorCandidates()` / `operatorPath()` 提成导出，状态行和读取器现在用同一套路径
+解析 —— 以前状态行报 `-`，用户不知道该往哪写。
+
+测试：selftest 49 → 54（补种五条：路径候选 / 新写 / 不覆盖 / force 备份 / 空文件不补），
+harness 30 → 33（新增 1b 组：补种真的进 system prompt、off 时不写文件）。
+
 ## 1.5.3
 
 [issue #2](https://github.com/jadezane6634-ops/dsh-purge-flash/issues/2) 与

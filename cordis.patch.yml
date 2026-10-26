@@ -19,6 +19,10 @@
         # 这是破甲强度的主要来源。off 只留内核，强度明显下降。
         operatorPrompt: on
         operatorHome: ''
+        # 一个操作稿都没有时，自动落一份 lib/operator-template.md 到
+        # $DSH_HOME/prompt-inject.md。只补「完全不存在」——已有文件（含空文件）一律不动，
+        # 删文件想关掉这一层请改用 operatorPrompt: off。
+        operatorSeed: on
         stripOfficial: true
         # 去重：foreign = 只剪别的插件重复注入的同一份，自己的头尾两段互不排斥。
         # all = 连自己内部也去重（1.0.1 行为）；off = 完全不去重。
